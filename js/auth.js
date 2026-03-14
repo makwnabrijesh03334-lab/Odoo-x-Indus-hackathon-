@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const loginForm = document.getElementById('login-form');
     const signupForm = document.getElementById('signup-form');
+    const btnGoogleLogin = document.getElementById('btn-google-login');
     const btnLogout = document.getElementById('btn-logout');
 
     const linkSignup = document.getElementById('link-signup');
@@ -126,6 +127,50 @@ document.addEventListener('DOMContentLoaded', () => {
             errSpan.textContent = "Invalid Login Id or Password";
         }
     });
+
+    // Google Sign-In
+    if (btnGoogleLogin) {
+        btnGoogleLogin.addEventListener('click', async () => {
+            if(!window.fbAuth) return utils.showToast("Firebase disabled", "error");
+            
+            const provider = new firebase.auth.GoogleAuthProvider();
+            utils.showLoader();
+
+            try {
+                const result = await window.fbAuth.signInWithPopup(provider);
+                const user = result.user;
+                
+                // Check if user exists in Firestore
+                const userDoc = await window.fbDb.collection('users').doc(user.uid).get();
+                
+                if (!userDoc.exists) {
+                    // Create new user record for first-time Google login
+                    const newUser = {
+                        uid: user.uid,
+                        loginId: user.email.split('@')[0], // Use email prefix as default loginId
+                        email: user.email,
+                        name: user.displayName || user.email.split('@')[0],
+                        role: 'User',
+                        avatar: user.photoURL || null,
+                        createdAt: new Date()
+                    };
+                    await window.fbDb.collection('users').doc(user.uid).set(newUser);
+                    window.currentUser = newUser;
+                    utils.showToast(`Welcome, ${newUser.name}!`, "success");
+                } else {
+                    window.currentUser = userDoc.data();
+                    utils.showToast(`Welcome back, ${window.currentUser.name}!`, "success");
+                }
+                
+                utils.hideLoader();
+            } catch (error) {
+                console.error("Google login error:", error);
+                utils.hideLoader();
+                // Friendly message for user, details in console
+                utils.showToast("Google authentication failed. Please try again.", "error");
+            }
+        });
+    }
 
     // Signup Form Submit
     signupForm.addEventListener('submit', async (e) => {
